@@ -24,7 +24,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # Si Blizzard refuse les serveurs GitHub, on déploie les données déjà versionnées.
       - name: Collecte Overwatch
+        continue-on-error: true
         run: python collector/overwatch.py
       - uses: actions/upload-pages-artifact@v3
         with:

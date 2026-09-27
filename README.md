@@ -16,6 +16,7 @@ Le méta multi-jeux basé sur de vraies statistiques de match, pas sur des votes
 
 - `collector/` : un script par jeu, qui écrit des JSON dans `site/data/<jeu>/`
 - `site/` : site statique (HTML/CSS/JS, sans build)
+- `site/data/` : données versionnées (collectées en local ; le workflow tente de les rafraîchir)
 - `.github/workflows/deploy.yml` : collecte quotidienne + déploiement GitHub Pages
 
 ## En local
