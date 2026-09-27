@@ -15,7 +15,9 @@ import json
 import os
 import re
 import sys
+import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -32,15 +34,40 @@ REGIONS = ["Americas", "Asia", "Europe"]
 TIERS = ["All", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Diamond", "Master", "Grandmaster"]
 
 
+# Blizzard renvoie 403/429 quand on enchaîne trop de requêtes depuis la même IP.
+# On patiente de plus en plus longtemps ; si ça persiste, on arrête toute la collecte
+# (les fichiers déjà présents restent en place).
+THROTTLE_CODES = {403, 429}
+THROTTLE_WAITS = [30, 90, 180]
+blocked = threading.Event()
+
+
 def fetch(params, retries=3):
     url = BASE_URL + "?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    for attempt in range(retries):
+    throttled = 0
+    attempt = 0
+    while True:
+        if blocked.is_set():
+            raise RuntimeError("collecte interrompue : Blizzard bloque les requêtes")
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 return html.unescape(resp.read().decode("utf-8"))
-        except Exception as exc:  # réseau instable, 5xx, etc.
-            if attempt == retries - 1:
+        except urllib.error.HTTPError as exc:
+            if exc.code in THROTTLE_CODES:
+                if throttled == len(THROTTLE_WAITS):
+                    blocked.set()
+                    raise RuntimeError(f"bloqué ({exc.code}) sur {url}") from exc
+                time.sleep(THROTTLE_WAITS[throttled])
+                throttled += 1
+                continue
+            attempt += 1
+            if attempt == retries:
+                raise RuntimeError(f"échec {url}: {exc}") from exc
+            time.sleep(2 ** attempt)
+        except Exception as exc:  # réseau instable, timeout, etc.
+            attempt += 1
+            if attempt == retries:
                 raise RuntimeError(f"échec {url}: {exc}") from exc
             time.sleep(2 ** attempt)
 
@@ -91,8 +118,8 @@ def main():
     parser.add_argument("--regions", nargs="+", default=REGIONS, choices=REGIONS)
     parser.add_argument("--tiers", nargs="+", default=TIERS, choices=TIERS)
     parser.add_argument("--maps", nargs="+", help="limiter à certaines maps (ids)")
-    parser.add_argument("--workers", type=int, default=4)
-    parser.add_argument("--delay", type=float, default=0.3, help="pause entre requêtes d'un worker (s)")
+    parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument("--delay", type=float, default=1.0, help="pause entre requêtes d'un worker (s)")
     args = parser.parse_args()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
