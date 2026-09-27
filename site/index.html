@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RealMeta — Overwatch</title>
+  <meta name="description" content="Le méta Overwatch basé sur les vraies statistiques officielles : win rate, pick rate et ban rate par héros et par map.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./">Real<span>Meta</span></a>
+    <nav class="games" aria-label="Jeux">
+      <a class="game active" href="./">Overwatch</a>
+      <span class="game soon" title="Bientôt">Valorant</span>
+      <span class="game soon" title="Bientôt">League of Legends</span>
+      <span class="game soon" title="Bientôt">CS2</span>
+      <span class="game soon" title="Bientôt">Dota 2</span>
+    </nav>
+  </header>
+
+  <main>
+    <section class="intro">
+      <h1>Méta Overwatch</h1>
+      <p>Statistiques officielles Blizzard, pas de votes. <span id="updated"></span></p>
+    </section>
+
+    <form class="filters" id="filters">
+      <label>Mode
+        <select name="mode">
+          <option value="competitive">Compétitif</option>
+          <option value="quickplay">Partie rapide</option>
+        </select>
+      </label>
+      <label>Plateforme
+        <select name="input">
+          <option value="PC">PC</option>
+          <option value="Console">Console</option>
+        </select>
+      </label>
+      <label>Région
+        <select name="region">
+          <option value="Europe">Europe</option>
+          <option value="Americas">Amériques</option>
+          <option value="Asia">Asie</option>
+        </select>
+      </label>
+      <label>Rang
+        <select name="tier"></select>
+      </label>
+      <label>Map
+        <select name="map"></select>
+      </label>
+      <label>Rôle
+        <select name="role">
+          <option value="">Tous</option>
+          <option value="TANK">Tank</option>
+          <option value="DAMAGE">Dégâts</option>
+          <option value="SUPPORT">Soutien</option>
+        </select>
+      </label>
+    </form>
+
+    <div class="tabs" role="tablist">
+      <button role="tab" data-view="tiers" aria-selected="true">Tier list</button>
+      <button role="tab" data-view="table" aria-selected="false">Tableau</button>
+      <button role="tab" data-view="heatmap" aria-selected="false">Héros × Maps</button>
+    </div>
+
+    <p class="status" id="status"></p>
+
+    <section class="view" id="view-tiers"></section>
+    <section class="view" id="view-table" hidden></section>
+    <section class="view" id="view-heatmap" hidden></section>
+
+    <dialog id="hero-dialog">
+      <div id="hero-detail"></div>
+      <form method="dialog"><button class="close">Fermer</button></form>
+    </dialog>
+  </main>
+
+  <footer>
+    <p>
+      Données : <a href="https://overwatch.blizzard.com/en-us/rates/" rel="noopener">statistiques officielles Blizzard</a>.
+      Tier = win rate ajusté selon le pick rate (un héros peu joué est ramené vers 50 %).
+      RealMeta n'est pas affilié à Blizzard Entertainment.
+    </p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
