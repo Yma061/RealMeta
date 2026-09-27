@@ -12,6 +12,7 @@ Sortie (dans site/data/overwatch/) :
 import argparse
 import html
 import json
+import os
 import re
 import sys
 import time
@@ -42,6 +43,11 @@ def fetch(params, retries=3):
             if attempt == retries - 1:
                 raise RuntimeError(f"échec {url}: {exc}") from exc
             time.sleep(2 ** attempt)
+
+
+def error(msg):
+    # Format "::error::" : affiché comme annotation dans GitHub Actions.
+    print(f"::error::{msg}" if os.environ.get("GITHUB_ACTIONS") else f"ERREUR {msg}", file=sys.stderr)
 
 
 def parse_rows(page):
@@ -92,7 +98,11 @@ def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # Page de référence : liste des maps et fiche de chaque héros.
-    page = fetch(params_for("competitive", "PC", "Europe", "All", "all-maps"))
+    try:
+        page = fetch(params_for("competitive", "PC", "Europe", "All", "all-maps"))
+    except Exception as exc:
+        error(exc)
+        sys.exit(1)
     maps = parse_maps(page)
     heroes = {
         r["id"]: {k: r["hero"].get(k) for k in ("name", "role", "subrole", "portrait", "color")}
@@ -118,7 +128,7 @@ def main():
                 print(f"[{i}/{len(combos)}] {future.result()}")
             except Exception as exc:
                 failures += 1
-                print(f"[{i}/{len(combos)}] ERREUR {exc}", file=sys.stderr)
+                error(f"[{i}/{len(combos)}] {exc}")
 
     meta = {
         "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
