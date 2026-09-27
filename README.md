@@ -34,6 +34,25 @@ Puis ouvrir http://localhost:8000.
 
 ## Calcul des tiers
 
-Un héros peu joué a un win rate bruité : on le ramène vers 50 % selon son pick rate
-(`wr_ajusté = 50 + (wr − 50) × pr / (pr + 2)`), puis
-S ≥ 52 · A ≥ 51 · B ≥ 49,5 · C ≥ 48 · D. Les héros sous 0,5 % de pick rate sont classés « Peu joué ».
+Code : `heroRows` dans `site/app.js`.
+
+1. **Win rate lissé** : un héros peu joué a un win rate bruité. On le rapproche d'un *prior*
+   selon son pick rate : `prior + (wr − prior) × pr / (pr + 2)`. Le prior vaut 50 % sur
+   « toutes maps », et le win rate global (lissé) du héros sur une map précise.
+2. **Score composite** par rôle (le tank a 1 place sur 5, ses pick rates ne sont pas comparables) :
+   `0,65 × z(win rate lissé) + 0,25 × z(log pick rate) + 0,10 × z(ban rate)`.
+3. **Tier** selon le z-score du score dans le rôle : S ≥ 1 · A ≥ 0,35 · B ≥ −0,35 · C ≥ −1 · D.
+   Les héros sous 0,5 % de pick rate sont « Peu joué ».
+
+## Patchs
+
+Blizzard remet ses stats à zéro à chaque patch. Le collecteur lit les
+[notes de patch](https://overwatch.blizzard.com/en-us/news/patch-notes/) et tient
+`site/data/overwatch/patches.json` à jour (date + héros modifiés, hors Stadium).
+
+- Les héros modifiés sont marqués `"change"`. Remplace à la main par `"buff"`, `"nerf"` ou
+  `"rework"` : la valeur est conservée aux collectes suivantes.
+- Au changement de patch, la dernière collecte est archivée dans `previous/`. Le site affiche
+  alors l'écart de win rate avec le patch précédent.
+- Les 3 premiers jours d'un patch (7 pour un héros modifié), le lissage est renforcé et la carte
+  du héros est grisée : peu de parties, tier provisoire.

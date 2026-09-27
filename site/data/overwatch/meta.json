@@ -1,6 +1,7 @@
 {
- "updated_at": "2026-09-27T20:34:55+00:00",
+ "updated_at": "2026-09-27T21:03:03+00:00",
  "source": "https://overwatch.blizzard.com/en-us/rates/",
+ "patch": "2026-09-22",
  "heroes": {
   "ana": {
    "name": "Ana",

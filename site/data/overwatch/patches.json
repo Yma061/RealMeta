@@ -1,0 +1,46 @@
+[
+ {
+  "date": "2026-09-22",
+  "title": "Overwatch Retail Patch Notes – September 22, 2026",
+  "changes": {}
+ },
+ {
+  "date": "2026-09-17",
+  "title": "Overwatch Retail Patch Notes – September 17, 2026",
+  "changes": {
+   "dmon": "change"
+  }
+ },
+ {
+  "date": "2026-09-10",
+  "title": "Overwatch Retail Patch Notes – September 10, 2026",
+  "changes": {}
+ },
+ {
+  "date": "2026-09-08",
+  "title": "Overwatch Retail Patch Notes – September 8, 2026",
+  "changes": {
+   "dmon": "change",
+   "dva": "change",
+   "domina": "change",
+   "mauga": "change",
+   "winston": "change",
+   "wrecking-ball": "change",
+   "zarya": "change",
+   "anran": "change",
+   "freja": "change",
+   "junkrat": "change",
+   "sierra": "change",
+   "symmetra": "change",
+   "torbjorn": "change",
+   "vendetta": "change",
+   "widowmaker": "change",
+   "baptiste": "change",
+   "brigitte": "change",
+   "jetpack-cat": "change",
+   "kiriko": "change",
+   "wuyang": "change",
+   "zenyatta": "change"
+  }
+ }
+]

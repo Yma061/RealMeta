@@ -192,3 +192,28 @@ footer { max-width: 1200px; margin: 32px auto; padding: 0 16px; color: var(--mut
   .hero-card img { width: 44px; height: 44px; }
   .map-bars li { grid-template-columns: 100px 1fr 48px; }
 }
+
+/* Titre de vue, badges de patch / spécialiste de map, confiance */
+.view-title { font-size: 18px; margin: 4px 0 12px; }
+.hero-card { position: relative; }
+.hero-card.low-conf { opacity: .6; }
+.hero-card .delta { font-size: 11px; font-weight: 600; }
+.hero-card .patch {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.hero-card .patch.buff { color: var(--good); border-color: var(--good); }
+.hero-card .patch.nerf { color: var(--bad); border-color: var(--bad); }
+.hero-card .patch.rework, .hero-card .patch.change { color: var(--accent); border-color: var(--accent); }
+.muted { color: var(--muted); }
+.heat-controls { margin-bottom: 8px; }
+.heat-controls label { font-size: 13px; color: var(--muted); display: inline-flex; gap: 8px; align-items: center; }
+.heat-controls select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px; }
