@@ -1,7 +1,7 @@
 {
- "updated_at": "2026-10-06T12:12:26+00:00",
+ "updated_at": "2026-10-07T11:57:42+00:00",
  "source": "https://overwatch.blizzard.com/en-us/rates/",
- "patch": "2026-09-22",
+ "patch": "2026-10-06",
  "heroes": {
   "ana": {
    "name": "Ana",
@@ -65,6 +65,13 @@
    "subrole": "initiator",
    "portrait": "https://d15f34w2p8l1cc.cloudfront.net/overwatch/df5a5532862d9292634fb3dc0e51a4705aa601de65e5e815513ccc663d84de56.png",
    "color": "fc79bdff"
+  },
+  "doctrine": {
+   "name": "Doctrine",
+   "role": "SUPPORT",
+   "subrole": "survivor",
+   "portrait": "https://d15f34w2p8l1cc.cloudfront.net/overwatch/2492a15c575c12314907d0d77501ec337b4d56796bc7f03e5dfb50d415612bae.png",
+   "color": "991344ff"
   },
   "domina": {
    "name": "Domina",
@@ -292,8 +299,8 @@
   },
   "sombra": {
    "name": "Sombra",
-   "role": "DAMAGE",
-   "subrole": "recon",
+   "role": "SUPPORT",
+   "subrole": "tactician",
    "portrait": "https://d15f34w2p8l1cc.cloudfront.net/overwatch/47727b02a16e3bd7b2447d86ae1edf11587bc320b2aecb4f2f16a7ca4ad4e8a0.png",
    "color": "5128a9ff"
   },
@@ -422,6 +429,11 @@
    "mode": "Escort"
   },
   {
+   "id": "grimsvotn",
+   "name": "Grímsvötn",
+   "mode": "Escort"
+  },
+  {
    "id": "havana",
    "name": "Havana",
    "mode": "Escort"
@@ -474,6 +486,11 @@
   {
    "id": "eichenwalde",
    "name": "Eichenwalde",
+   "mode": "Hybrid"
+  },
+  {
+   "id": "hollywood",
+   "name": "Hollywood",
    "mode": "Hybrid"
   },
   {
