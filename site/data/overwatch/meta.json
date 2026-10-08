@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-10-07T11:57:42+00:00",
+ "updated_at": "2026-10-08T12:15:15+00:00",
  "source": "https://overwatch.blizzard.com/en-us/rates/",
  "patch": "2026-10-06",
  "heroes": {
@@ -486,11 +486,6 @@
   {
    "id": "eichenwalde",
    "name": "Eichenwalde",
-   "mode": "Hybrid"
-  },
-  {
-   "id": "hollywood",
-   "name": "Hollywood",
    "mode": "Hybrid"
   },
   {
