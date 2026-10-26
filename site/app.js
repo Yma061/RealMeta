@@ -10,17 +10,24 @@ const TIER_LABELS_FR = {
 const ROLE_LABELS_FR = { TANK: "Tank", DAMAGE: "Dégâts", SUPPORT: "Soutien" };
 const CHANGE_LABELS = { buff: ["▲", "buff"], nerf: ["▼", "nerf"], rework: ["⟳", "rework"], change: ["✎", "modifié"] };
 
-// Tier list : classement relatif, rôle par rôle (le tank a 1 place sur 5, ses pick rates
-// ne sont pas comparables à ceux des autres rôles).
+// Deux axes séparés, calculés rôle par rôle (le tank a 1 place sur 5, ses pick rates ne
+// sont pas comparables à ceux des autres rôles) :
+//   force      = win rate lissé            → détermine le tier
+//   popularité = log du pick rate effectif → badge et graphique, pas dans le tier
 const PRIOR_K = 2;          // pick rate (%) pour lequel on fait confiance à moitié au win rate observé
 const MIN_PICKRATE = 0.5;
-const W = { wr: 0.65, pr: 0.25, br: 0.10 };               // poids du score composite
-const Z_CUTS = [["S", 1.0], ["A", 0.35], ["B", -0.35], ["C", -1.0]];
+// Tier hybride : il faut à la fois se détacher du rôle (z) et s'écarter vraiment de 50 %,
+// sinon un méta plat (tous les tanks entre 49 et 51 %) produirait quand même des S.
+const HIGH_TIERS = [["S", 1.0, 51], ["A", 0.35, 50.3]];     // z ≥ seuil ET win rate lissé ≥ min
+const LOW_TIERS = [["D", -1.0, 49], ["C", -0.35, 49.7]];    // z ≤ seuil ET win rate lissé ≤ max
+const POPULARITY_Z = 1;     // |z| au-delà duquel un héros est « très joué » ou « niche »
+const ROLE_SHAPES = { TANK: "square", DAMAGE: "triangle", SUPPORT: "circle" };
 // Blizzard repart de zéro à chaque patch : les premiers jours, peu de parties pour tout le monde.
 const FRESH_DAYS = 3;
 // Un héros modifié par le patch en cours est en plus « réappris » par les joueurs.
 const CHANGED_FRESH_DAYS = 7;
-const PATCH_BADGE_DAYS = 30;
+const PATCH_BADGE_DAYS = 14;   // Overwatch patche chaque semaine : au-delà, le badge devient du bruit
+const VIEWS = ["tiers", "scatter", "table", "heatmap"];
 
 const form = document.getElementById("filters");
 const statusEl = document.getElementById("status");
@@ -29,6 +36,7 @@ let meta = null;
 let patches = [];
 let view = "tiers";
 let heatMode = "abs";
+let lastRows = [];
 let tableSort = { key: "score", dir: -1 };
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -54,9 +62,30 @@ function zScores(rows, key) {
   for (const r of rows) r["z_" + key] = (r[key] - mean) / sd;
 }
 
-function tierOfZ(z) {
-  for (const [t, cut] of Z_CUTS) if (z >= cut) return t;
-  return "D";
+function tierOf(z, wrAdj) {
+  for (const [t, cut, min] of HIGH_TIERS) if (z >= cut && wrAdj >= min) return t;
+  for (const [t, cut, max] of LOW_TIERS) if (z <= cut && wrAdj <= max) return t;
+  return "B";
+}
+
+// Un héros banni dans X % des parties ne peut pas être joué dans ces parties-là :
+// pick rate « quand il est disponible ».
+function effectivePickrate(pr, br) {
+  return br > 0 && br < 100 ? pr / (1 - br / 100) : pr;
+}
+
+function popularityLabel(r) {
+  if (r.z_pop == null) return null;
+  if (r.z_pop >= POPULARITY_Z) return "Très joué";
+  if (r.z_pop <= -POPULARITY_Z) return "Niche";
+  return null;
+}
+
+// Quadrant force × popularité (relatifs au rôle).
+function profileOf(r) {
+  if (r.z_wrAdj == null) return null;
+  if (r.z_wrAdj >= 0) return r.z_pop >= 0 ? "Méta" : "Pépite";
+  return r.z_pop >= 0 ? "Surcoté" : "À éviter";
 }
 
 // Dernier patch ayant modifié le héros : { date, change } ou null.
@@ -127,30 +156,39 @@ function heroRows(combo, mapId, role) {
         changedThisPatch ? freshness(patchDays, CHANGED_FRESH_DAYS) : 1,
       );
       const valid = wr != null && pr != null;
+      const prEff = valid ? effectivePickrate(pr, br ?? 0) : null;
       // Sur une map : prior = win rate global (lissé) du héros. Sur « toutes maps » : 50 %.
-      const prior = hasGlobal ? shrink(g[0], g[1], 50) : 50;
+      const prior = hasGlobal ? shrink(g[0], effectivePickrate(g[1], g[2] ?? 0), 50) : 50;
       const prevWr = prevStats[id]?.[0];
       return {
-        id, ...meta.heroes[id], wr, pr, br: br ?? 0,
-        wrAdj: valid ? shrink(wr, pr, prior, PRIOR_K * fresh) : null,
-        prLog: valid ? Math.log(Math.max(pr, 0.1)) : null, // pick rate très asymétrique → log
+        id, ...meta.heroes[id], wr, pr, br: br ?? 0, prEff,
+        wrAdj: valid ? shrink(wr, prEff, prior, PRIOR_K * fresh) : null,
+        pop: valid ? Math.log(Math.max(prEff, 0.1)) : null, // pick rate très asymétrique → log
         delta: hasGlobal && wr != null ? wr - g[0] : null,
         trend: wr != null && prevWr != null ? wr - prevWr : null,
         change: changed && changedDays <= PATCH_BADGE_DAYS ? changed.change : null,
         changedDays,
         lowConfidence: fresh > 1.5,
         valid,
-        score: -Infinity, tier: null,
+        score: -Infinity, tier: null, z_wrAdj: null, z_pop: null,
       };
     });
 
   const eligible = rows.filter((r) => r.valid && r.pr >= MIN_PICKRATE);
   for (const group of groupBy(eligible, (r) => r.role).values()) {
-    if (group.length < 3) { for (const r of group) { r.score = 0; r.tier = "B"; } continue; }
-    zScores(group, "wrAdj"); zScores(group, "prLog"); zScores(group, "br");
-    for (const r of group) r.score = W.wr * r.z_wrAdj + W.pr * r.z_prLog + W.br * r.z_br;
-    zScores(group, "score");
-    for (const r of group) r.tier = tierOfZ(r.z_score);
+    if (group.length < 3) {
+      for (const r of group) { r.z_wrAdj = 0; r.z_pop = 0; r.score = 0; r.tier = "B"; }
+      continue;
+    }
+    zScores(group, "wrAdj"); zScores(group, "pop");
+    for (const r of group) {
+      r.score = r.z_wrAdj;
+      r.tier = tierOf(r.z_wrAdj, r.wrAdj);
+    }
+  }
+  for (const r of rows) {
+    r.popularity = popularityLabel(r);
+    r.profile = profileOf(r);
   }
   return rows;
 }
@@ -165,11 +203,12 @@ function patchBadge(h) {
 function heroCard(h) {
   const cls = h.wr == null ? "" : h.wr >= 50 ? "up" : "down";
   return `<button class="hero-card ${h.lowConfidence ? "low-conf" : ""}" data-hero="${esc(h.id)}"
-      title="${esc(h.name)} — WR ${fmt(h.wr)} · PR ${fmt(h.pr)}${h.lowConfidence ? " · données encore limitées" : ""}">
+      title="${esc(h.name)} — WR ${fmt(h.wr)} · PR ${fmt(h.pr)} · BR ${fmt(h.br)}${h.lowConfidence ? " · données encore limitées" : ""}">
     ${patchBadge(h)}
     <img src="${esc(h.portrait)}" alt="" loading="lazy">
     <div class="name">${esc(h.name)}</div>
     <div class="wr ${cls}">${h.wr == null ? "–" : h.wr.toFixed(1) + "%"}</div>
+    ${h.popularity ? `<div class="pop">${h.popularity}</div>` : ""}
     ${h.delta != null && Math.abs(h.delta) >= 1
       ? `<div class="delta ${h.delta > 0 ? "up" : "down"}" title="Écart vs son win rate toutes maps">${signed(h.delta)}</div>` : ""}
   </button>`;
@@ -199,6 +238,8 @@ function renderTable(rows, f, hasPrev) {
     ...(hasPrev ? [{ key: "trend", label: "Δ vs patch préc." }] : []),
     { key: "pr", label: "Pick rate" },
     ...(showBan ? [{ key: "br", label: "Ban rate" }] : []),
+    { key: "z_pop", label: "Popularité" },
+    { key: "profile", label: "Profil" },
     { key: "changedDays", label: "Dernier patch" },
   ];
   const { key, dir } = tableSort;
@@ -215,6 +256,8 @@ function renderTable(rows, f, hasPrev) {
       case "delta": return diffCell(h.delta);
       case "trend": return diffCell(h.trend);
       case "wr": return `<td class="${h.wr == null ? "" : h.wr >= 50 ? "up" : "down"}">${fmt(h.wr)}</td>`;
+      case "z_pop": return `<td title="Pick rate effectif (hors bans) : ${fmt(h.prEff)}">${h.popularity || (h.z_pop == null ? "–" : "Moyenne")}</td>`;
+      case "profile": return `<td>${h.profile || "–"}</td>`;
       case "changedDays": return `<td>${h.change ? `${(CHANGE_LABELS[h.change] || CHANGE_LABELS.change)[1]} · J+${h.changedDays}` : "–"}</td>`;
       default: return `<td>${fmt(h[c.key])}</td>`;
     }
@@ -223,6 +266,99 @@ function renderTable(rows, f, hasPrev) {
     <thead><tr>${cols.map((c) => `<th data-sort="${c.key}" class="${c.key === key ? "sorted" : ""}">${c.label}${c.key === key ? (dir < 0 ? " ▼" : " ▲") : ""}</th>`).join("")}</tr></thead>
     <tbody>${sorted.map((h) => `<tr data-hero="${esc(h.id)}">${cols.map((c) => cell(h, c)).join("")}</tr>`).join("")}</tbody>
   </table></div>`;
+}
+
+// Nuage force × popularité : les deux axes sont des z-scores dans le rôle, ce qui permet
+// d'afficher tanks, dégâts et soutiens sur le même graphique.
+const QUADRANTS = [
+  { name: "Méta", hint: "fort et très joué", x: 1, y: 1 },
+  { name: "Pépites", hint: "fort mais peu joué", x: -1, y: 1 },
+  { name: "Surcotés", hint: "très joué mais faible", x: 1, y: -1 },
+  { name: "À éviter", hint: "faible et peu joué", x: -1, y: -1 },
+];
+
+function shapePath(shape, x, y, r) {
+  if (shape === "square") return `<rect x="${x - r}" y="${y - r}" width="${2 * r}" height="${2 * r}" rx="1.5"`;
+  if (shape === "triangle") {
+    const h = r * 1.2;
+    return `<path d="M${x} ${y - h}L${x + h} ${y + h * 0.8}L${x - h} ${y + h * 0.8}Z"`;
+  }
+  return `<circle cx="${x}" cy="${y}" r="${r}"`;
+}
+
+function renderScatter(rows) {
+  const W = 800, H = 520, PAD = { l: 48, r: 16, t: 16, b: 44 }, LIM = 2.6;
+  const points = rows.filter((r) => r.z_wrAdj != null);
+  const sx = (z) => PAD.l + ((Math.max(-LIM, Math.min(LIM, z)) + LIM) / (2 * LIM)) * (W - PAD.l - PAD.r);
+  const sy = (z) => PAD.t + (1 - (Math.max(-LIM, Math.min(LIM, z)) + LIM) / (2 * LIM)) * (H - PAD.t - PAD.b);
+  const x0 = sx(0), y0 = sy(0);
+  const quadLabels = QUADRANTS.map((q) => {
+    const x = q.x > 0 ? W - PAD.r - 8 : PAD.l + 8;
+    const y = q.y > 0 ? PAD.t + 18 : H - PAD.b - 22;
+    const anchor = q.x > 0 ? "end" : "start";
+    return `<text class="quad-name" x="${x}" y="${y}" text-anchor="${anchor}">${q.name}</text>
+      <text class="quad-hint" x="${x}" y="${y + 15}" text-anchor="${anchor}">${q.hint}</text>`;
+  }).join("");
+  // Étiquettes seulement pour les héros qui se détachent, en commençant par les plus
+  // excentrés ; une étiquette qui chevaucherait une autre est essayée à gauche, sinon omise.
+  const placed = [];
+  const labels = new Map();
+  const overlaps = (b) => placed.some((p) => b.x1 < p.x2 && b.x2 > p.x1 && b.y1 < p.y2 && b.y2 > p.y1);
+  for (const r of [...points].sort((a, b) => Math.hypot(b.z_wrAdj, b.z_pop) - Math.hypot(a.z_wrAdj, a.z_pop))) {
+    if (Math.abs(r.z_wrAdj) < 1.2 && Math.abs(r.z_pop) < 1.4) continue;
+    const x = sx(r.z_pop), y = sy(r.z_wrAdj), w = r.name.length * 6.6;
+    for (const [lx, anchor] of [[x + 9, "start"], [x - 9, "end"]]) {
+      const box = { x1: anchor === "start" ? lx : lx - w, x2: anchor === "start" ? lx + w : lx, y1: y - 8, y2: y + 6 };
+      if (!overlaps(box)) { placed.push(box); labels.set(r.id, { lx, anchor }); break; }
+    }
+  }
+  const marks = points.map((r) => {
+    const x = sx(r.z_pop), y = sy(r.z_wrAdj), l = labels.get(r.id);
+    return `<g class="pt role-${r.role.toLowerCase()}" data-hero="${esc(r.id)}">
+      <circle class="hit" cx="${x}" cy="${y}" r="12"/>
+      ${shapePath(ROLE_SHAPES[r.role], x, y, 5.5)} class="mark"/>
+      ${l ? `<text class="pt-label" x="${l.lx}" y="${y + 4}" text-anchor="${l.anchor}">${esc(r.name)}</text>` : ""}
+    </g>`;
+  }).join("");
+  const roles = [...new Set(points.map((r) => r.role))];
+  const legend = roles.map((role) => `<span class="legend-item role-${role.toLowerCase()}">
+      <svg width="14" height="14" viewBox="0 0 14 14">${shapePath(ROLE_SHAPES[role], 7, 7, 5)} class="mark"/></svg>
+      ${ROLE_LABELS_FR[role] || esc(role)}</span>`).join("");
+  document.getElementById("view-scatter").innerHTML = `
+    <div class="scatter-legend">${legend}</div>
+    <p class="legend">Chaque héros est comparé aux autres héros de son rôle. Vers le haut : il gagne plus
+      (win rate lissé). Vers la droite : il est plus joué (pick rate hors bans). Survole un point pour le détail.</p>
+    <div class="scatter-wrap">
+      <svg class="scatter" viewBox="0 0 ${W} ${H}" role="img" aria-label="Force et popularité des héros">
+        <line class="axis-mid" x1="${x0}" x2="${x0}" y1="${PAD.t}" y2="${H - PAD.b}"/>
+        <line class="axis-mid" x1="${PAD.l}" x2="${W - PAD.r}" y1="${y0}" y2="${y0}"/>
+        ${quadLabels}
+        <text class="axis-title" x="${(PAD.l + W - PAD.r) / 2}" y="${H - 12}" text-anchor="middle">Popularité →</text>
+        <text class="axis-title" transform="translate(16 ${(PAD.t + H - PAD.b) / 2}) rotate(-90)" text-anchor="middle">Force →</text>
+        ${marks}
+      </svg>
+      <div class="tooltip" hidden></div>
+    </div>`;
+}
+
+function showScatterTooltip(e) {
+  const wrap = e.target.closest(".scatter-wrap");
+  const tip = wrap?.querySelector(".tooltip");
+  if (!tip) return;
+  const pt = e.target.closest("[data-hero]");
+  if (!pt) { tip.hidden = true; return; }
+  const r = lastRows.find((x) => x.id === pt.dataset.hero);
+  if (!r) return;
+  tip.innerHTML = `<strong>${esc(r.name)}</strong> · ${ROLE_LABELS_FR[r.role] || esc(r.role)}
+    ${r.tier ? `<span class="tier-pill" style="background:${TIER_COLORS[r.tier]}">${r.tier}</span>` : ""}<br>
+    Win rate ${fmt(r.wr)} (lissé ${fmt(r.wrAdj)})<br>
+    Pick rate ${fmt(r.pr)} · hors bans ${fmt(r.prEff)}<br>
+    Ban rate ${fmt(r.br)} · <em>${esc(r.profile || "")}</em>`;
+  const box = wrap.getBoundingClientRect();
+  const x = e.clientX - box.left, y = e.clientY - box.top;
+  tip.hidden = false;
+  tip.style.left = Math.min(x + 14, box.width - tip.offsetWidth - 4) + "px";
+  tip.style.top = Math.max(y - tip.offsetHeight - 10, 4) + "px";
 }
 
 function renderHeatmap(combo, role) {
@@ -303,10 +439,11 @@ async function render() {
     combo = await loadCombo(f);
   } catch {
     statusEl.textContent = "Pas de données pour cette combinaison de filtres.";
-    for (const v of ["tiers", "table", "heatmap"]) document.getElementById("view-" + v).innerHTML = "";
+    for (const v of VIEWS) document.getElementById("view-" + v).innerHTML = "";
     return;
   }
   const rows = heroRows(combo, f.map, f.role);
+  lastRows = rows;
   const mapName = f.map === "all-maps" ? "Toutes les maps" : meta.maps.find((m) => m.id === f.map)?.name;
   const patchDays = daysSince(combo.patch);
   const notes = [`${rows.length} héros`];
@@ -315,6 +452,7 @@ async function render() {
   else if (patchDays != null && patchDays < FRESH_DAYS) notes.push("⚠ patch récent : peu de parties, tiers provisoires");
   statusEl.textContent = notes.join(" · ");
   if (view === "tiers") renderTiers(rows, `Tier list — ${mapName}`);
+  if (view === "scatter") renderScatter(rows);
   if (view === "table") renderTable(rows, f, !!combo.prev);
   if (view === "heatmap") renderHeatmap(combo, f.role);
 }
@@ -361,6 +499,12 @@ async function init() {
   document.getElementById("view-heatmap").addEventListener("change", (e) => {
     if (e.target.id === "heat-mode") { heatMode = e.target.value; render(); }
   });
+  const scatterView = document.getElementById("view-scatter");
+  scatterView.addEventListener("pointermove", showScatterTooltip);
+  scatterView.addEventListener("pointerleave", () => {
+    const tip = scatterView.querySelector(".tooltip");
+    if (tip) tip.hidden = true;
+  });
   document.querySelector("main").addEventListener("click", (e) => {
     const th = e.target.closest("th[data-sort]");
     if (th) {
@@ -372,7 +516,7 @@ async function init() {
     if (heroEl && !e.target.closest("dialog")) showHero(heroEl.dataset.hero);
   });
 
-  setView(["tiers", "table", "heatmap"].includes(view) ? view : "tiers");
+  setView(VIEWS.includes(view) ? view : "tiers");
 }
 
 init();

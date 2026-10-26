@@ -217,3 +217,39 @@ footer { max-width: 1200px; margin: 32px auto; padding: 0 16px; color: var(--mut
 .heat-controls { margin-bottom: 8px; }
 .heat-controls label { font-size: 13px; color: var(--muted); display: inline-flex; gap: 8px; align-items: center; }
 .heat-controls select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px; }
+
+/* Badge popularité */
+.hero-card .pop { font-size: 10px; color: var(--muted); text-transform: lowercase; }
+
+/* Nuage force × popularité — couleurs de rôle validées sur la surface sombre (#181b24) */
+:root { --role-tank: #3987e5; --role-damage: #d95926; --role-support: #199e70; }
+.role-tank { --role: var(--role-tank); }
+.role-damage { --role: var(--role-damage); }
+.role-support { --role: var(--role-support); }
+.scatter-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; margin-bottom: 4px; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend-item .mark { fill: var(--role); }
+.scatter-wrap { position: relative; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; }
+.scatter { width: 100%; height: auto; display: block; }
+.scatter .axis-mid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 4; }
+.scatter .axis-title { fill: var(--muted); font-size: 12px; }
+.scatter .quad-name { fill: var(--muted); font-size: 14px; font-weight: 700; }
+.scatter .quad-hint { fill: var(--muted); font-size: 11px; opacity: .7; }
+.scatter .pt { cursor: pointer; }
+.scatter .pt .hit { fill: transparent; }
+.scatter .pt .mark { fill: var(--role); stroke: var(--panel); stroke-width: 2; }
+.scatter .pt:hover .mark { stroke: var(--text); }
+.scatter .pt-label { fill: var(--text); font-size: 11px; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .4);
+}
+.tooltip .tier-pill { margin-left: 4px; padding: 0 4px; }

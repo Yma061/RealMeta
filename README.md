@@ -34,15 +34,27 @@ Puis ouvrir http://localhost:8000.
 
 ## Calcul des tiers
 
-Code : `heroRows` dans `site/app.js`.
+Code : `heroRows` dans `site/app.js`. Deux axes séparés, calculés **au sein de chaque rôle**
+(le tank a 1 place sur 5, ses pick rates ne sont pas comparables aux autres rôles).
 
-1. **Win rate lissé** : un héros peu joué a un win rate bruité. On le rapproche d'un *prior*
-   selon son pick rate : `prior + (wr − prior) × pr / (pr + 2)`. Le prior vaut 50 % sur
+1. **Pick rate effectif** : un héros banni dans X % des parties ne peut pas y être joué,
+   donc `pr_eff = pr / (1 − ban rate)`.
+2. **Force = win rate lissé** : un héros peu joué a un win rate bruité, on le rapproche d'un
+   *prior* : `prior + (wr − prior) × pr_eff / (pr_eff + 2)`. Le prior vaut 50 % sur
    « toutes maps », et le win rate global (lissé) du héros sur une map précise.
-2. **Score composite** par rôle (le tank a 1 place sur 5, ses pick rates ne sont pas comparables) :
-   `0,65 × z(win rate lissé) + 0,25 × z(log pick rate) + 0,10 × z(ban rate)`.
-3. **Tier** selon le z-score du score dans le rôle : S ≥ 1 · A ≥ 0,35 · B ≥ −0,35 · C ≥ −1 · D.
+3. **Tier = force seule**, hybride relatif + absolu (évite des S « obligatoires » sur un méta plat) :
+
+   | Tier | z-score de la force dans le rôle | et win rate lissé |
+   |---|---|---|
+   | S | ≥ 1 | ≥ 51 % |
+   | A | ≥ 0,35 | ≥ 50,3 % |
+   | C | ≤ −0,35 | ≤ 49,7 % |
+   | D | ≤ −1 | ≤ 49 % |
+   | B | le reste | |
+
    Les héros sous 0,5 % de pick rate sont « Peu joué ».
+4. **Popularité = log du pick rate effectif**, affichée à part : badge « très joué » / « niche »
+   (|z| ≥ 1) et graphique force × popularité en 4 zones (méta, pépites, surcotés, à éviter).
 
 ## Patchs
 

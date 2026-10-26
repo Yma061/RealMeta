@@ -63,6 +63,7 @@
 
     <div class="tabs" role="tablist">
       <button role="tab" data-view="tiers" aria-selected="true">Tier list</button>
+      <button role="tab" data-view="scatter" aria-selected="false">Force × Popularité</button>
       <button role="tab" data-view="table" aria-selected="false">Tableau</button>
       <button role="tab" data-view="heatmap" aria-selected="false">Héros × Maps</button>
     </div>
@@ -70,6 +71,7 @@
     <p class="status" id="status"></p>
 
     <section class="view" id="view-tiers"></section>
+    <section class="view" id="view-scatter" hidden></section>
     <section class="view" id="view-table" hidden></section>
     <section class="view" id="view-heatmap" hidden></section>
 
@@ -82,7 +84,8 @@
   <footer>
     <p>
       Données : <a href="https://overwatch.blizzard.com/en-us/rates/" rel="noopener">statistiques officielles Blizzard</a>.
-      Tier = classement relatif au sein de chaque rôle, combinant win rate (lissé selon le volume de jeu), pick rate et ban rate.
+      Tier = force seule : win rate lissé selon le volume de jeu, comparé aux héros du même rôle et à 50 %.
+      La popularité (pick rate hors bans) est affichée à part.
       Les stats repartent de zéro à chaque patch : ▲ buff, ▼ nerf, ⟳ rework, ✎ modifié (J+ = jours depuis le changement).
       RealMeta n'est pas affilié à Blizzard Entertainment.
     </p>
