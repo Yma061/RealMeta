@@ -22,10 +22,15 @@ const HIGH_TIERS = [["S", 1.0, 51], ["A", 0.35, 50.3]];     // z ≥ seuil ET wi
 const LOW_TIERS = [["D", -1.0, 49], ["C", -0.35, 49.7]];    // z ≤ seuil ET win rate lissé ≤ max
 const POPULARITY_Z = 1;     // |z| au-delà duquel un héros est « très joué » ou « niche »
 const ROLE_SHAPES = { TANK: "square", DAMAGE: "triangle", SUPPORT: "circle" };
-// Blizzard repart de zéro à chaque patch : les premiers jours, peu de parties pour tout le monde.
+// Les stats sont cumulées depuis la dernière remise à zéro (gros patchs seulement, pas les
+// patchs hebdomadaires) : les premiers jours de la période, peu de parties pour tout le monde.
 const FRESH_DAYS = 3;
-// Un héros modifié par le patch en cours est en plus « réappris » par les joueurs.
+// Un héros modifié au moment de la remise à zéro est en plus « réappris » par les joueurs.
 const CHANGED_FRESH_DAYS = 7;
+// Un héros modifié en cours de période a des stats qui mélangent avant et après : on le
+// signale tant que moins de la moitié de la période est postérieure à la modification.
+const MIXED_SHARE = 0.5;
+const MAX_BAN_FOR_PR = 90;     // au-delà, corriger le pick rate par les bans l'exploserait
 const PATCH_BADGE_DAYS = 14;   // Overwatch patche chaque semaine : au-delà, le badge devient du bruit
 const VIEWS = ["tiers", "scatter", "table", "heatmap"];
 
@@ -71,7 +76,7 @@ function tierOf(z, wrAdj) {
 // Un héros banni dans X % des parties ne peut pas être joué dans ces parties-là :
 // pick rate « quand il est disponible ».
 function effectivePickrate(pr, br) {
-  return br > 0 && br < 100 ? pr / (1 - br / 100) : pr;
+  return br > 0 ? pr / (1 - Math.min(br, MAX_BAN_FOR_PR) / 100) : pr;
 }
 
 function popularityLabel(r) {
@@ -131,18 +136,18 @@ async function loadJSON(path) {
   }
 }
 
-// Collecte en cours + celle du patch précédent (si elle existe).
+// Collecte en cours + celle d'avant la dernière remise à zéro (si elle existe).
 async function loadCombo(f) {
   const combo = await loadJSON(fileFor(f));
   const prev = await loadJSON("previous/" + fileFor(f)).catch(() => null);
-  return { ...combo, prev: prev && prev.patch !== combo.patch ? prev : null };
+  return { ...combo, prev: prev && prev.window_start !== combo.window_start ? prev : null };
 }
 
 function heroRows(combo, mapId, role) {
   const stats = combo.maps[mapId] || {};
   const global = combo.maps["all-maps"] || {};
   const prevStats = combo.prev?.maps[mapId] || {};
-  const patchDays = daysSince(combo.patch);
+  const windowDays = daysSince(combo.window_start);
   const rows = Object.entries(stats)
     .filter(([id]) => meta.heroes[id] && (!role || meta.heroes[id].role === role))
     .map(([id, [wr, pr, br]]) => {
@@ -150,10 +155,13 @@ function heroRows(combo, mapId, role) {
       const hasGlobal = mapId !== "all-maps" && g && g[0] != null && g[1] != null;
       const changed = lastChange(id);
       const changedDays = daysSince(changed?.date);
-      const changedThisPatch = changed && changed.date === combo.patch;
+      // Modifié en cours de période : part approximative des parties jouées après la modification.
+      const postChangeShare = changed && combo.window_start && changed.date > combo.window_start && windowDays
+        ? Math.min(1, changedDays / windowDays) : null;
+      const changedAtReset = changed && changed.date === combo.window_start;
       const fresh = Math.max(
-        freshness(patchDays, FRESH_DAYS),
-        changedThisPatch ? freshness(patchDays, CHANGED_FRESH_DAYS) : 1,
+        freshness(windowDays, FRESH_DAYS),
+        changedAtReset ? freshness(windowDays, CHANGED_FRESH_DAYS) : 1,
       );
       const valid = wr != null && pr != null;
       const prEff = valid ? effectivePickrate(pr, br ?? 0) : null;
@@ -168,7 +176,9 @@ function heroRows(combo, mapId, role) {
         trend: wr != null && prevWr != null ? wr - prevWr : null,
         change: changed && changedDays <= PATCH_BADGE_DAYS ? changed.change : null,
         changedDays,
-        lowConfidence: fresh > 1.5,
+        postChangeShare,
+        mixed: postChangeShare != null && postChangeShare < MIXED_SHARE,
+        lowConfidence: fresh > 1.5 || (postChangeShare != null && postChangeShare < MIXED_SHARE),
         valid,
         score: -Infinity, tier: null, z_wrAdj: null, z_pop: null,
       };
@@ -196,14 +206,24 @@ function heroRows(combo, mapId, role) {
 function patchBadge(h) {
   if (!h.change) return "";
   const [icon, label] = CHANGE_LABELS[h.change] || CHANGE_LABELS.change;
-  const title = `${label} il y a ${h.changedDays} j` + (h.trend != null ? ` · WR ${signed(h.trend)} vs patch précédent` : "");
+  const title = `${label} il y a ${h.changedDays} j` + (h.mixed ? ` · ${mixedNote(h)}` : "");
   return `<div class="patch ${esc(h.change)}" title="${esc(title)}">${icon} J+${h.changedDays}</div>`;
+}
+
+function mixedNote(h) {
+  return `stats encore surtout d'avant la modification (≈${Math.round(h.postChangeShare * 100)} % de la période après)`;
+}
+
+function confidenceNote(h) {
+  if (h.mixed) return mixedNote(h);
+  return h.lowConfidence ? "données encore limitées" : "";
 }
 
 function heroCard(h) {
   const cls = h.wr == null ? "" : h.wr >= 50 ? "up" : "down";
+  const note = confidenceNote(h);
   return `<button class="hero-card ${h.lowConfidence ? "low-conf" : ""}" data-hero="${esc(h.id)}"
-      title="${esc(h.name)} — WR ${fmt(h.wr)} · PR ${fmt(h.pr)} · BR ${fmt(h.br)}${h.lowConfidence ? " · données encore limitées" : ""}">
+      title="${esc(h.name)} — WR ${fmt(h.wr)} · PR ${fmt(h.pr)} · BR ${fmt(h.br)}${note ? " · " + esc(note) : ""}">
     ${patchBadge(h)}
     <img src="${esc(h.portrait)}" alt="" loading="lazy">
     <div class="name">${esc(h.name)}</div>
@@ -235,7 +255,7 @@ function renderTable(rows, f, hasPrev) {
     { key: "score", label: "Tier" },
     { key: "wr", label: "Win rate" },
     ...(showDelta ? [{ key: "delta", label: "Δ vs toutes maps" }] : []),
-    ...(hasPrev ? [{ key: "trend", label: "Δ vs patch préc." }] : []),
+    ...(hasPrev ? [{ key: "trend", label: "Δ vs période préc." }] : []),
     { key: "pr", label: "Pick rate" },
     ...(showBan ? [{ key: "br", label: "Ban rate" }] : []),
     { key: "z_pop", label: "Popularité" },
@@ -252,7 +272,7 @@ function renderTable(rows, f, hasPrev) {
     switch (c.key) {
       case "name": return `<td><img class="mini" src="${esc(h.portrait)}" alt="" loading="lazy">${esc(h.name)}</td>`;
       case "role": return `<td>${ROLE_LABELS_FR[h.role] || esc(h.role)}</td>`;
-      case "score": return `<td>${h.tier ? `<span class="tier-pill" style="background:${TIER_COLORS[h.tier]}">${h.tier}</span>` : "–"}${h.lowConfidence ? ' <span class="muted" title="Données encore limitées">?</span>' : ""}</td>`;
+      case "score": return `<td>${h.tier ? `<span class="tier-pill" style="background:${TIER_COLORS[h.tier]}">${h.tier}</span>` : "–"}${h.lowConfidence ? ` <span class="muted" title="${esc(confidenceNote(h))}">?</span>` : ""}</td>`;
       case "delta": return diffCell(h.delta);
       case "trend": return diffCell(h.trend);
       case "wr": return `<td class="${h.wr == null ? "" : h.wr >= 50 ? "up" : "down"}">${fmt(h.wr)}</td>`;
@@ -418,7 +438,7 @@ async function showHero(id) {
       <div>
         <h2>${esc(hero.name)}</h2>
         <p>${ROLE_LABELS_FR[hero.role] || esc(hero.role)} · ${esc(hero.subrole || "")}</p>
-        ${global ? `<p>Toutes maps : WR ${fmt(global[0])} · PR ${fmt(global[1])}${prevGlobal?.[0] != null && global[0] != null ? ` · ${signed(global[0] - prevGlobal[0])} vs patch préc.` : ""}</p>` : ""}
+        ${global ? `<p>Toutes maps : WR ${fmt(global[0])} · PR ${fmt(global[1])}${prevGlobal?.[0] != null && global[0] != null ? ` · ${signed(global[0] - prevGlobal[0])} vs période préc.` : ""}</p>` : ""}
         ${changed ? `<p>Dernière modification : ${(CHANGE_LABELS[changed.change] || CHANGE_LABELS.change)[1]} le ${shortDate(changed.date)}</p>` : ""}
       </div>
     </div>
@@ -445,11 +465,11 @@ async function render() {
   const rows = heroRows(combo, f.map, f.role);
   lastRows = rows;
   const mapName = f.map === "all-maps" ? "Toutes les maps" : meta.maps.find((m) => m.id === f.map)?.name;
-  const patchDays = daysSince(combo.patch);
+  const windowDays = daysSince(combo.window_start);
   const notes = [`${rows.length} héros`];
-  if (combo.patch) notes.push(`patch du ${shortDate(combo.patch)} (J+${patchDays})`);
-  if (combo.patch && meta.patch && combo.patch !== meta.patch) notes.push("⚠ ces filtres n'ont pas encore été rafraîchis depuis le dernier patch");
-  else if (patchDays != null && patchDays < FRESH_DAYS) notes.push("⚠ patch récent : peu de parties, tiers provisoires");
+  if (combo.window_start) notes.push(`stats cumulées depuis le ${shortDate(combo.window_start)} (J+${windowDays})`);
+  if (combo.collected_at && daysSince(combo.collected_at) > 2) notes.push(`⚠ ces filtres n'ont pas pu être rafraîchis depuis le ${shortDate(combo.collected_at)}`);
+  else if (windowDays != null && windowDays < FRESH_DAYS) notes.push("⚠ remise à zéro récente : peu de parties, tiers provisoires");
   statusEl.textContent = notes.join(" · ");
   if (view === "tiers") renderTiers(rows, `Tier list — ${mapName}`);
   if (view === "scatter") renderScatter(rows);

@@ -56,15 +56,28 @@ Code : `heroRows` dans `site/app.js`. Deux axes séparés, calculés **au sein d
 4. **Popularité = log du pick rate effectif**, affichée à part : badge « très joué » / « niche »
    (|z| ≥ 1) et graphique force × popularité en 4 zones (méta, pépites, surcotés, à éviter).
 
-## Patchs
+## Patchs et remises à zéro
 
-Blizzard remet ses stats à zéro à chaque patch. Le collecteur lit les
-[notes de patch](https://overwatch.blizzard.com/en-us/news/patch-notes/) et tient
-`site/data/overwatch/patches.json` à jour (date + héros modifiés, hors Stadium).
+Blizzard cumule ses stats depuis sa dernière remise à zéro. D'après l'historique de nos
+collectes, **seuls les gros patchs remettent à zéro** (ex. 6 octobre 2026, 20+ héros modifiés) ;
+les patchs hebdomadaires ne le font pas. Blizzard ne rafraîchit d'ailleurs ses chiffres que
+tous les 1 à 3 jours.
 
-- Les héros modifiés sont marqués `"change"`. Remplace à la main par `"buff"`, `"nerf"` ou
-  `"rework"` : la valeur est conservée aux collectes suivantes.
-- Au changement de patch, la dernière collecte est archivée dans `previous/`. Le site affiche
-  alors l'écart de win rate avec le patch précédent.
-- Les 3 premiers jours d'un patch (7 pour un héros modifié), le lissage est renforcé et la carte
-  du héros est grisée : peu de parties, tier provisoire.
+- Le collecteur détecte la remise à zéro **dans les données** : l'écart moyen de win rate avec
+  la collecte précédente dépasse 1 point pour la majorité des combinaisons d'un mode. La
+  collecte précédente est alors archivée dans `previous/` (colonne « Δ vs période préc. »).
+- Chaque fichier indique `window_start` (début de la période cumulée) et `collected_at`.
+- `patches.json` (lu sur les [notes de patch](https://overwatch.blizzard.com/en-us/news/patch-notes/))
+  sert aux badges : héros marqués `"change"`, à remplacer à la main par `"buff"`, `"nerf"` ou
+  `"rework"` (valeur conservée aux collectes suivantes).
+- Un héros modifié **en cours de période** a des stats qui mélangent avant et après la
+  modification : sa carte est grisée tant que moins de la moitié de la période est postérieure.
+- Les 3 premiers jours après une remise à zéro (7 pour un héros modifié à ce moment-là), le
+  lissage est renforcé : peu de parties, tier provisoire.
+
+## Fiabilité de la source
+
+Blizzard renvoie parfois les stats d'une autre combinaison que celle demandée (constaté sur
+12 jours de collecte sur 33 avant correction). Le collecteur vérifie que chaque page affiche
+bien les filtres demandés, puis écarte toute combinaison dont les chiffres sont identiques à
+ceux d'une autre ; ses données précédentes sont alors conservées.
