@@ -30,7 +30,8 @@ const CHANGED_FRESH_DAYS = 7;
 // Un héros modifié en cours de période a des stats qui mélangent avant et après : on le
 // signale tant que moins de la moitié de la période est postérieure à la modification.
 const MIXED_SHARE = 0.5;
-const MAX_BAN_FOR_PR = 90;     // au-delà, corriger le pick rate par les bans l'exploserait
+const LOW_MAP_RELIABILITY = 0.3; // en dessous, on prévient que les stats par map sont surtout du bruit
+const MAX_BAN_FOR_PR = 90;    // au-delà, corriger le pick rate par les bans l'exploserait
 const PATCH_BADGE_DAYS = 14;   // Overwatch patche chaque semaine : au-delà, le badge devient du bruit
 const VIEWS = ["tiers", "scatter", "table", "heatmap"];
 
@@ -140,7 +141,17 @@ async function loadJSON(path) {
 async function loadCombo(f) {
   const combo = await loadJSON(fileFor(f));
   const prev = await loadJSON("previous/" + fileFor(f)).catch(() => null);
-  return { ...combo, prev: prev && prev.window_start !== combo.window_start ? prev : null };
+  const tier = f.mode === "quickplay" ? "All" : f.tier;
+  const reliability = meta.map_reliability?.[`${f.mode}_${f.input}_${tier}`.toLowerCase()];
+  return { ...combo, reliability, prev: prev && prev.window_start !== combo.window_start ? prev : null };
+}
+
+// Sur une map, on ne garde de l'écart au win rate global du héros que la part de signal
+// mesurée par le collecteur (corrélation de cet écart entre régions) : de ~0,8 tous rangs
+// confondus à ~0,02 en Grand maître, où les stats par map sont presque entièrement du bruit.
+function mapWeight(combo, prEff, fresh) {
+  if (combo.reliability == null) return prEff / (prEff + PRIOR_K * fresh); // ancien lissage
+  return combo.reliability / fresh;
 }
 
 function heroRows(combo, mapId, role) {
@@ -168,9 +179,12 @@ function heroRows(combo, mapId, role) {
       // Sur une map : prior = win rate global (lissé) du héros. Sur « toutes maps » : 50 %.
       const prior = hasGlobal ? shrink(g[0], effectivePickrate(g[1], g[2] ?? 0), 50) : 50;
       const prevWr = prevStats[id]?.[0];
+      // Part retenue de l'écart map − toutes maps (null hors vue map).
+      const mapEffect = valid && hasGlobal ? (wr - g[0]) * mapWeight(combo, prEff, fresh) : null;
       return {
         id, ...meta.heroes[id], wr, pr, br: br ?? 0, prEff,
-        wrAdj: valid ? shrink(wr, prEff, prior, PRIOR_K * fresh) : null,
+        wrAdj: !valid ? null : hasGlobal ? prior + mapEffect : shrink(wr, prEff, prior, PRIOR_K * fresh),
+        mapEffect,
         pop: valid ? Math.log(Math.max(prEff, 0.1)) : null, // pick rate très asymétrique → log
         delta: hasGlobal && wr != null ? wr - g[0] : null,
         trend: wr != null && prevWr != null ? wr - prevWr : null,
@@ -229,7 +243,7 @@ function heroCard(h) {
     <div class="name">${esc(h.name)}</div>
     <div class="wr ${cls}">${h.wr == null ? "–" : h.wr.toFixed(1) + "%"}</div>
     ${h.popularity ? `<div class="pop">${h.popularity}</div>` : ""}
-    ${h.delta != null && Math.abs(h.delta) >= 1
+    ${h.delta != null && Math.abs(h.mapEffect) >= 1
       ? `<div class="delta ${h.delta > 0 ? "up" : "down"}" title="Écart vs son win rate toutes maps">${signed(h.delta)}</div>` : ""}
   </button>`;
 }
@@ -307,21 +321,27 @@ function shapePath(shape, x, y, r) {
 }
 
 function renderScatter(rows) {
-  const W = 800, H = 520, PAD = { l: 48, r: 16, t: 16, b: 44 }, LIM = 2.6;
+  // Dessiné à la largeur réelle (1 unité = 1 px) pour garder un texte lisible sur mobile.
+  const available = document.getElementById("view-scatter").clientWidth - 18;
+  const W = Math.max(320, Math.min(800, available || 800)), H = Math.round(Math.min(520, W * 0.95));
+  const PAD = { l: 32, r: 12, t: 16, b: 40 }, LIM = 2.6;
   const points = rows.filter((r) => r.z_wrAdj != null);
   const sx = (z) => PAD.l + ((Math.max(-LIM, Math.min(LIM, z)) + LIM) / (2 * LIM)) * (W - PAD.l - PAD.r);
   const sy = (z) => PAD.t + (1 - (Math.max(-LIM, Math.min(LIM, z)) + LIM) / (2 * LIM)) * (H - PAD.t - PAD.b);
   const x0 = sx(0), y0 = sy(0);
+  // Les noms de héros évitent aussi les libellés des zones (boîtes réservées d'avance).
+  const placed = [];
   const quadLabels = QUADRANTS.map((q) => {
     const x = q.x > 0 ? W - PAD.r - 8 : PAD.l + 8;
     const y = q.y > 0 ? PAD.t + 18 : H - PAD.b - 22;
     const anchor = q.x > 0 ? "end" : "start";
+    const w = Math.max(q.name.length * 8.5, q.hint.length * 6);
+    placed.push({ x1: anchor === "end" ? x - w : x, x2: anchor === "end" ? x : x + w, y1: y - 14, y2: y + 19 });
     return `<text class="quad-name" x="${x}" y="${y}" text-anchor="${anchor}">${q.name}</text>
       <text class="quad-hint" x="${x}" y="${y + 15}" text-anchor="${anchor}">${q.hint}</text>`;
   }).join("");
   // Étiquettes seulement pour les héros qui se détachent, en commençant par les plus
   // excentrés ; une étiquette qui chevaucherait une autre est essayée à gauche, sinon omise.
-  const placed = [];
   const labels = new Map();
   const overlaps = (b) => placed.some((p) => b.x1 < p.x2 && b.x2 > p.x1 && b.y1 < p.y2 && b.y2 > p.y1);
   for (const r of [...points].sort((a, b) => Math.hypot(b.z_wrAdj, b.z_pop) - Math.hypot(a.z_wrAdj, a.z_pop))) {
@@ -333,12 +353,16 @@ function renderScatter(rows) {
     }
   }
   const marks = points.map((r) => {
-    const x = sx(r.z_pop), y = sy(r.z_wrAdj), l = labels.get(r.id);
+    const x = sx(r.z_pop), y = sy(r.z_wrAdj);
     return `<g class="pt role-${r.role.toLowerCase()}" data-hero="${esc(r.id)}">
       <circle class="hit" cx="${x}" cy="${y}" r="12"/>
       ${shapePath(ROLE_SHAPES[r.role], x, y, 5.5)} class="mark"/>
-      ${l ? `<text class="pt-label" x="${l.lx}" y="${y + 4}" text-anchor="${l.anchor}">${esc(r.name)}</text>` : ""}
     </g>`;
+  }).join("");
+  // Noms dessinés après tous les points, pour qu'aucun point ne les recouvre.
+  const names = points.filter((r) => labels.has(r.id)).map((r) => {
+    const l = labels.get(r.id);
+    return `<text class="pt-label" x="${l.lx}" y="${sy(r.z_wrAdj) + 4}" text-anchor="${l.anchor}">${esc(r.name)}</text>`;
   }).join("");
   const roles = [...new Set(points.map((r) => r.role))];
   const legend = roles.map((role) => `<span class="legend-item role-${role.toLowerCase()}">
@@ -356,6 +380,7 @@ function renderScatter(rows) {
         <text class="axis-title" x="${(PAD.l + W - PAD.r) / 2}" y="${H - 12}" text-anchor="middle">Popularité →</text>
         <text class="axis-title" transform="translate(16 ${(PAD.t + H - PAD.b) / 2}) rotate(-90)" text-anchor="middle">Force →</text>
         ${marks}
+        <g class="pt-labels">${names}</g>
       </svg>
       <div class="tooltip" hidden></div>
     </div>`;
@@ -471,6 +496,11 @@ async function render() {
   if (combo.window_start) notes.push(`stats cumulées depuis le ${shortDate(combo.window_start)} (J+${windowDays})`);
   if (combo.collected_at && daysSince(combo.collected_at) > 2) notes.push(`⚠ ces filtres n'ont pas pu être rafraîchis depuis le ${shortDate(combo.collected_at)}`);
   else if (windowDays != null && windowDays < FRESH_DAYS) notes.push("⚠ remise à zéro récente : peu de parties, tiers provisoires");
+  const mapView = f.map !== "all-maps" || view === "heatmap";
+  if (mapView && combo.reliability != null && combo.reliability < LOW_MAP_RELIABILITY) {
+    notes.push(`⚠ à ce rang, les écarts par map sont surtout du bruit (fiabilité ${Math.round(combo.reliability * 100)} %) : `
+      + (view === "heatmap" ? "lis la heatmap avec prudence" : "la tier list reste proche de celle toutes maps"));
+  }
   statusEl.textContent = notes.join(" · ");
   if (view === "tiers") renderTiers(rows, `Tier list — ${mapName}`);
   if (view === "scatter") renderScatter(rows);
@@ -519,6 +549,11 @@ async function init() {
   });
   document.getElementById("view-heatmap").addEventListener("change", (e) => {
     if (e.target.id === "heat-mode") { heatMode = e.target.value; render(); }
+  });
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { if (view === "scatter") render(); }, 150);
   });
   const scatterView = document.getElementById("view-scatter");
   scatterView.addEventListener("pointermove", showScatterTooltip);

@@ -183,10 +183,15 @@ def parse_patches(page, hero_ids_by_name):
                 heading = re.search(r'PatchNotes-sectionTitle"[^>]*>([^<]*)', section)
                 context = heading.group(1).lower() if heading else ""
             elif kind.endswith("hero_update") and "stadium" not in context and "bug" not in context:
+                own = re.search(r'PatchNotes-sectionTitle"[^>]*>([^<]*)', section)
+                own = own.group(1).lower() if own else ""
+                # Les retouches de hitbox touchent presque tous les héros : ce n'est pas de l'équilibrage.
+                if "hit volume" in own or "hitbox" in own:
+                    continue
                 for name in re.findall(r'PatchNotesHeroUpdate-name"[^>]*>([^<]+)', section):
                     hero_id = hero_ids_by_name.get(name.strip().lower())
                     if hero_id:
-                        changes[hero_id] = "change"
+                        changes[hero_id] = "rework" if "rework" in own else changes.get(hero_id, "change")
         patches.append({
             "date": datetime.strptime(raw_date.group(1).strip(), "%B %d, %Y").date().isoformat(),
             "title": title.group(1).strip() if title else "",
@@ -204,7 +209,9 @@ def update_patches(heroes):
         for patch in parse_patches(fetch(None, base=PATCH_NOTES_URL), by_name):
             old = known.get(patch["date"])
             if old:
-                patch["changes"] = {**patch["changes"], **old["changes"]}
+                # Les tags posés à la main (tout sauf "change") priment sur la détection automatique.
+                manual = {h: tag for h, tag in old["changes"].items() if tag != "change"}
+                patch["changes"] = {**patch["changes"], **manual}
             known[patch["date"]] = patch
     except Exception as exc:
         error(f"notes de patch : {exc}")
@@ -283,6 +290,45 @@ def write_results(results, today, patches):
         path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
 
 
+def map_reliability(inputs, tiers_by_mode):
+    """Part de signal dans l'écart d'un héros sur une map (WR_map − WR_global), par mode,
+    plateforme et rang : corrélation de cet écart entre régions. Le vrai effet de la map est
+    commun aux régions, le bruit d'échantillonnage est indépendant d'une région à l'autre."""
+    def gaps(name):
+        path = OUT_DIR / f"{name}.json"
+        if not path.exists():
+            return {}
+        maps = json.loads(path.read_text(encoding="utf-8"))["maps"]
+        overall = maps.get("all-maps", {})
+        return {
+            (map_id, hero): wr - overall[hero][0]
+            for map_id, stats in maps.items() if map_id != "all-maps"
+            for hero, (wr, pr, _) in stats.items()
+            if wr is not None and pr and pr >= 0.5 and overall.get(hero) and overall[hero][0] is not None
+        }
+
+    def corr(xs, ys):
+        mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+        sx = sum((x - mx) ** 2 for x in xs) ** 0.5
+        sy = sum((y - my) ** 2 for y in ys) ** 0.5
+        return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / (sx * sy) if sx and sy else 0.0
+
+    reliability = {}
+    for mode, tiers in tiers_by_mode.items():
+        for input_ in inputs:
+            for tier in tiers:
+                per_region = [gaps(f"{mode}_{input_}_{region}_{tier}".lower()) for region in REGIONS]
+                values = []
+                for i, a in enumerate(per_region):
+                    for b in per_region[i + 1:]:
+                        keys = [k for k in a if k in b]
+                        if len(keys) >= 100:
+                            values.append(corr([a[k] for k in keys], [b[k] for k in keys]))
+                if values:
+                    reliability[f"{mode}_{input_}_{tier}".lower()] = round(max(0.0, sum(values) / len(values)), 3)
+    return reliability
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--modes", nargs="+", default=list(MODE_TITLES), choices=list(MODE_TITLES))
@@ -343,6 +389,7 @@ def main():
         "source": BASE_URL,
         "heroes": heroes,
         "maps": [m for m in maps if m["id"] in map_ids],
+        "map_reliability": map_reliability(INPUTS, {"competitive": TIERS, "quickplay": ["All"]}),
         "filters": {
             "modes": args.modes,
             "inputs": args.inputs,

@@ -39,9 +39,18 @@ Code : `heroRows` dans `site/app.js`. Deux axes séparés, calculés **au sein d
 
 1. **Pick rate effectif** : un héros banni dans X % des parties ne peut pas y être joué,
    donc `pr_eff = pr / (1 − ban rate)`.
-2. **Force = win rate lissé** : un héros peu joué a un win rate bruité, on le rapproche d'un
-   *prior* : `prior + (wr − prior) × pr_eff / (pr_eff + 2)`. Le prior vaut 50 % sur
-   « toutes maps », et le win rate global (lissé) du héros sur une map précise.
+2. **Force = win rate lissé**.
+   - **Toutes maps** : un héros peu joué a un win rate bruité, on le rapproche de 50 % :
+     `50 + (wr − 50) × pr_eff / (pr_eff + 2)`.
+   - **Sur une map** : `win rate global lissé + r × (wr_map − wr_global)`. `r` est la part de
+     signal dans l'écart map, mesurée à chaque collecte (`map_reliability` dans `meta.json`) :
+     corrélation de cet écart entre les 3 régions, par mode, plateforme et rang. Le vrai effet
+     d'une map est commun aux régions, le bruit est indépendant. Mesures du 27/10/2026 :
+     ~0,8 tous rangs confondus (PC), 0,4 à 0,6 d'Argent à Émeraude, ~0,3 en Diamant, ~0,1 en
+     Bronze et Maître, ~0,02 en Grand maître. En dessous de 0,3, le site prévient que les
+     écarts par map sont surtout du bruit.
+     Une régression `Var(écart) ≈ a + b / pick rate` a été essayée d'abord : instable (K de
+     1 à 750 selon la combinaison), et la fiabilité ne dépend presque pas du pick rate.
 3. **Tier = force seule**, hybride relatif + absolu (évite des S « obligatoires » sur un méta plat) :
 
    | Tier | z-score de la force dans le rôle | et win rate lissé |

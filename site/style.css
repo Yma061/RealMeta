@@ -70,8 +70,11 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; min-width: 0; }
 .filters select {
+  /* Sans ça, un menu prend la largeur de sa plus longue option et élargit toute la page sur mobile. */
+  width: 100%;
+  min-width: 0;
   background: var(--panel-2);
   color: var(--text);
   border: 1px solid var(--border);
@@ -186,10 +189,16 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
 footer { max-width: 1200px; margin: 32px auto; padding: 0 16px; color: var(--muted); font-size: 13px; }
 
 @media (max-width: 600px) {
-  .tier-row { grid-template-columns: 44px 1fr; }
+  .topbar { gap: 8px 16px; }
+  /* Onglets : défilement horizontal plutôt que de faire déborder la page */
+  .tabs { overflow-x: auto; scrollbar-width: none; }
+  .tabs button { flex-shrink: 0; padding: 10px; }
+  .tier-row { grid-template-columns: 40px minmax(0, 1fr); }
   .tier-label { font-size: 20px; }
-  .hero-card { width: 72px; }
-  .hero-card img { width: 44px; height: 44px; }
+  .tier-heroes { gap: 6px; padding: 6px; }
+  .hero-card { width: calc((100% - 18px) / 4); min-width: 0; padding: 4px; }
+  .hero-card img { width: 40px; height: 40px; }
+  .hero-card .name { font-size: 11px; }
   .map-bars li { grid-template-columns: 100px 1fr 48px; }
 }
 
@@ -239,7 +248,8 @@ footer { max-width: 1200px; margin: 32px auto; padding: 0 16px; color: var(--mut
 .scatter .pt .hit { fill: transparent; }
 .scatter .pt .mark { fill: var(--role); stroke: var(--panel); stroke-width: 2; }
 .scatter .pt:hover .mark { stroke: var(--text); }
-.scatter .pt-label { fill: var(--text); font-size: 11px; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
+.scatter .pt-labels { pointer-events: none; }
+.scatter .pt-label {fill: var(--text); font-size: 11px; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
 .tooltip {
   position: absolute;
   pointer-events: none;
