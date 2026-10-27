@@ -55,7 +55,10 @@ RESET_MIN_SHARE = 0.5
 RESET_MIN_DAYS = 3
 FILTER_CHECK_RETRIES = 3
 
-MODES = {"competitive": "2", "quickplay": "0"}
+# Valeur du paramètre "rq" de chaque mode, lue dans le menu de Blizzard (par son libellé) au
+# début de chaque collecte : Blizzard a déjà renuméroté ses modes (compétitif : 2, puis 1).
+MODE_TITLES = {"competitive": "Competitive", "quickplay": "Quick Play"}
+MODES = {}
 INPUTS = ["PC", "Console"]
 REGIONS = ["Americas", "Asia", "Europe"]
 TIERS = ["All", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Diamond", "Master", "Grandmaster"]
@@ -122,6 +125,19 @@ def parse_maps(page):
         for map_id, name in re.findall(r'value="([^"]+)">([^<]+)<', body):
             maps.append({"id": map_id, "name": name.strip(), "mode": mode})
     return maps
+
+
+def parse_modes(page):
+    """{mode: valeur rq} d'après les libellés du menu de mode."""
+    menu = re.search(r'<select[^>]*data-label="rq"[^>]*>(.*?)</select>', page, re.S)
+    options = re.findall(r'<option[^>]*data-title="([^"]+)"[^>]*value="([^"]+)"', menu.group(1)) if menu else []
+    modes = {}
+    for mode, title in MODE_TITLES.items():
+        value = next((v for t, v in options if t.startswith(title)), None)
+        if value is None:
+            raise ValueError(f"mode « {title} » introuvable dans le menu de Blizzard : {options}")
+        modes[mode] = value
+    return modes
 
 
 def selected_filters(page):
@@ -269,7 +285,7 @@ def write_results(results, today, patches):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--modes", nargs="+", default=list(MODES), choices=list(MODES))
+    parser.add_argument("--modes", nargs="+", default=list(MODE_TITLES), choices=list(MODE_TITLES))
     parser.add_argument("--inputs", nargs="+", default=INPUTS, choices=INPUTS)
     parser.add_argument("--regions", nargs="+", default=REGIONS, choices=REGIONS)
     parser.add_argument("--tiers", nargs="+", default=TIERS, choices=TIERS)
@@ -280,12 +296,14 @@ def main():
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Page de référence : liste des maps et fiche de chaque héros.
+    # Page de référence (sans filtre) : valeurs des modes, liste des maps, fiche de chaque héros.
     try:
-        page = fetch(params_for("competitive", "PC", "Europe", "All", "all-maps"))
+        page = fetch(None)
+        MODES.update(parse_modes(page))
     except Exception as exc:
         error(exc)
         sys.exit(1)
+    print(f"modes : {MODES}")
     maps = parse_maps(page)
     heroes = {
         r["id"]: {k: r["hero"].get(k) for k in ("name", "role", "subrole", "portrait", "color")}

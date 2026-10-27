@@ -77,7 +77,12 @@ tous les 1 à 3 jours.
 
 ## Fiabilité de la source
 
-Blizzard renvoie parfois les stats d'une autre combinaison que celle demandée (constaté sur
-12 jours de collecte sur 33 avant correction). Le collecteur vérifie que chaque page affiche
-bien les filtres demandés, puis écarte toute combinaison dont les chiffres sont identiques à
-ceux d'une autre ; ses données précédentes sont alors conservées.
+Blizzard a renuméroté ses modes (compétitif : `rq=2`, puis `rq=1`), en alternant entre les
+deux numérotations pendant plusieurs semaines. Avec une valeur périmée, la page retombe sur
+la partie rapide et ignore le rang : 12 jours de collecte sur 33 en ont été faussés. Depuis :
+
+- la valeur de chaque mode est lue dans le menu de Blizzard (par son libellé) à chaque collecte ;
+- chaque page doit afficher les filtres demandés, sinon elle est redemandée puis écartée ;
+- toute combinaison dont les chiffres sont identiques à ceux d'une autre est écartée.
+
+Une combinaison écartée garde ses données précédentes.
