@@ -450,8 +450,9 @@ async function showHero(id) {
 }
 
 async function render() {
+  // Avant de lire les filtres : un champ désactivé est ignoré par FormData, le rang serait perdu.
+  form.tier.disabled = form.mode.value === "quickplay";
   const f = filters();
-  form.tier.disabled = f.mode === "quickplay";
   history.replaceState(null, "", "#" + new URLSearchParams({ ...f, view }));
   statusEl.textContent = "Chargement…";
   let combo;
