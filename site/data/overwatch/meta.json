@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-10-29T11:47:34+00:00",
+ "updated_at": "2026-10-30T11:32:15+00:00",
  "source": "https://overwatch.blizzard.com/en-us/rates/",
  "heroes": {
   "ana": {
@@ -557,7 +557,7 @@
   "competitive_console_diamond": 0.236,
   "competitive_console_master": 0.117,
   "competitive_console_grandmaster": 0.034,
-  "quickplay_pc_all": 0.796,
+  "quickplay_pc_all": 0.797,
   "quickplay_console_all": 0.595
  },
  "filters": {
