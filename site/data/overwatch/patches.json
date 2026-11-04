@@ -1,5 +1,31 @@
 [
  {
+  "date": "2026-11-03",
+  "title": "Overwatch Retail Patch Notes – November 3, 2026",
+  "changes": {
+   "dmon": "change",
+   "junker-queen": "change",
+   "mauga": "change",
+   "ramattra": "change",
+   "winston": "change",
+   "anran": "change",
+   "echo": "change",
+   "emre": "change",
+   "genji": "change",
+   "hanzo": "change",
+   "reaper": "change",
+   "shion": "change",
+   "vendetta": "change",
+   "ana": "change",
+   "baptiste": "change",
+   "brigitte": "change",
+   "doctrine": "change",
+   "illari": "change",
+   "jetpack-cat": "change",
+   "sombra": "change"
+  }
+ },
+ {
   "date": "2026-10-20",
   "title": "Overwatch Retail Patch Notes – October 20, 2026",
   "changes": {}
