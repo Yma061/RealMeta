@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-11-06T13:07:36+00:00",
+ "updated_at": "2026-11-07T11:57:44+00:00",
  "source": "https://overwatch.blizzard.com/en-us/rates/",
  "heroes": {
   "ana": {
@@ -539,26 +539,26 @@
   }
  ],
  "map_reliability": {
-  "competitive_pc_all": 0.269,
-  "competitive_pc_bronze": 0.009,
-  "competitive_pc_silver": 0.054,
-  "competitive_pc_gold": 0.052,
-  "competitive_pc_platinum": 0.077,
-  "competitive_pc_emerald": 0.105,
-  "competitive_pc_diamond": 0.028,
+  "competitive_pc_all": 0.387,
+  "competitive_pc_bronze": 0.014,
+  "competitive_pc_silver": 0.087,
+  "competitive_pc_gold": 0.115,
+  "competitive_pc_platinum": 0.145,
+  "competitive_pc_emerald": 0.137,
+  "competitive_pc_diamond": 0.041,
   "competitive_pc_master": 0.0,
-  "competitive_pc_grandmaster": 0.062,
-  "competitive_console_all": 0.166,
+  "competitive_pc_grandmaster": 0.086,
+  "competitive_console_all": 0.246,
   "competitive_console_bronze": 0.0,
-  "competitive_console_silver": 0.008,
-  "competitive_console_gold": 0.017,
-  "competitive_console_platinum": 0.029,
-  "competitive_console_emerald": 0.045,
-  "competitive_console_diamond": 0.038,
-  "competitive_console_master": 0.039,
-  "competitive_console_grandmaster": 0.0,
-  "quickplay_pc_all": 0.266,
-  "quickplay_console_all": 0.087
+  "competitive_console_silver": 0.029,
+  "competitive_console_gold": 0.062,
+  "competitive_console_platinum": 0.072,
+  "competitive_console_emerald": 0.077,
+  "competitive_console_diamond": 0.068,
+  "competitive_console_master": 0.024,
+  "competitive_console_grandmaster": 0.033,
+  "quickplay_pc_all": 0.376,
+  "quickplay_console_all": 0.123
  },
  "filters": {
   "modes": [
